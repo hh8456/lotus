@@ -205,7 +205,7 @@ func mockBuilderOpts(t *testing.T, fullOpts []test.FullNodeOpts, storage []test.
 		if err != nil {
 			t.Fatal(err)
 		}
-		genm, k, err := seed.PreSeal(maddr, abi.RegisteredSealProof_StackedDrg2KiBV1, 0, test.GenesisPreseals, tdir, []byte("make genesis mem random"), nil, true)
+		genm, k, err := seed.PreSeal(maddr, abi.RegisteredSealProof_StackedDrg8MiBV1, 0, test.GenesisPreseals, tdir, []byte("make genesis mem random"), nil, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -330,6 +330,7 @@ func mockSbBuilderOpts(t *testing.T, fullOpts []test.FullNodeOpts, storage []tes
 	t.Cleanup(cancel)
 
 	mn := mocknet.New(ctx)
+	mn.SetLinkDefaults(mocknet.LinkOptions{Bandwidth: 512 * 1024})
 
 	fulls := make([]test.TestNode, len(fullOpts))
 	storers := make([]test.TestStorageNode, len(storage))
@@ -355,7 +356,7 @@ func mockSbBuilderOpts(t *testing.T, fullOpts []test.FullNodeOpts, storage []tes
 			preseals = test.GenesisPreseals
 		}
 
-		genm, k, err := mockstorage.PreSeal(abi.RegisteredSealProof_StackedDrg2KiBV1, maddr, preseals)
+		genm, k, err := mockstorage.PreSeal(abi.RegisteredSealProof_StackedDrg8MiBV1, maddr, preseals)
 		if err != nil {
 			t.Fatal(err)
 		}
