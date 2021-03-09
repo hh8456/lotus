@@ -72,13 +72,13 @@ var runCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		if !cctx.Bool("wdpost") {
+		if cctx.Bool("wdpost") {
 			os.Setenv("LOTUS_WDPOST", "true")
 		} else {
 			os.Unsetenv("LOTUS_WDPOST")
 		}
 
-		if !cctx.Bool("wnpost") {
+		if cctx.Bool("wnpost") {
 			os.Setenv("LOTUS_WNPOST", "true")
 		} else {
 			os.Unsetenv("LOTUS_WNPOST")
