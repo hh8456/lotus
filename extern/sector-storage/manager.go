@@ -25,7 +25,7 @@ import (
 	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 )
 
-var log = logging.Logger("advmgr")
+var log = logging.Logger("sectorstorage")
 
 var ErrNoWorkers = errors.New("no suitable workers found")
 
@@ -243,6 +243,7 @@ func (m *Manager) tryReadUnsealedPiece(ctx context.Context, sink io.Writer, sect
 
 		selector = newExistingSelector(m.index, sector.ID, storiface.FTUnsealed, false)
 
+		log.Debugf("huanghai, 如果看见这条日志需要查看源码, at (m *Manager) tryReadUnsealedPiece")
 		err = m.sched.Schedule(ctx, sector, sealtasks.TTReadUnsealed, selector, m.schedFetch(sector, storiface.FTUnsealed, storiface.PathSealing, storiface.AcquireMove),
 			m.readPiece(sink, sector, offset, size, &readOk))
 		if err != nil {
@@ -282,6 +283,7 @@ func (m *Manager) ReadPiece(ctx context.Context, sink io.Writer, sector storage.
 		return nil
 	}
 
+	log.Debugf("huanghai, 如果看见这条日志需要查看源码, at (m *Manager) ReadPiece")
 	if unsealed == cid.Undef {
 		return xerrors.Errorf("cannot unseal piece (sector: %d, offset: %d size: %d) - unsealed cid is undefined", sector, offset, size)
 	}
@@ -346,6 +348,7 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 }
 
 func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (out storage.PreCommit1Out, err error) {
+	log.Debugf("huanghai, 进入 func (m *Manager) SealPreCommit1")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -381,12 +384,17 @@ func (m *Manager) SealPreCommit1(ctx context.Context, sector storage.SectorRef, 
 	selector := newAllocSelector(m.index, storiface.FTCache|storiface.FTSealed, storiface.PathSealing)
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit1, selector, m.schedFetch(sector, storiface.FTUnsealed, storiface.PathSealing, storiface.AcquireMove), func(ctx context.Context, w Worker) error {
+		log.Debugf("huanghai, 进入 func (m *Manager) SealPreCommit1, 并执行 rpc w.SealPreCommit1, 此时应该去查看 worker 的日志进行对比")
 		err := m.startWork(ctx, w, wk)(w.SealPreCommit1(ctx, sector, ticket, pieces))
 		if err != nil {
 			return err
 		}
 
+		log.Debugf("huanghai, 执行 func (m *Manager) SealPreCommit1 中的 waitRes() ...... start")
+
 		waitRes()
+
+		log.Debugf("huanghai, 执行 func (m *Manager) SealPreCommit1 中的 waitRes() ...... end, 这里可能是等到了 worker 的 rpc 回应")
 		return nil
 	})
 	if err != nil {
@@ -430,6 +438,7 @@ func (m *Manager) SealPreCommit2(ctx context.Context, sector storage.SectorRef, 
 	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, true)
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTPreCommit2, selector, m.schedFetch(sector, storiface.FTCache|storiface.FTSealed, storiface.PathSealing, storiface.AcquireMove), func(ctx context.Context, w Worker) error {
+		//log.Debugf("huanghai, 进入 func (m *Manager) SealPreCommit2, 并执行 rpc  w.SealPreCommit2, 此时应该去查看 worker 的日志进行对比")
 		err := m.startWork(ctx, w, wk)(w.SealPreCommit2(ctx, sector, phase1Out))
 		if err != nil {
 			return err
@@ -482,6 +491,7 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, false)
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTCommit1, selector, m.schedFetch(sector, storiface.FTCache|storiface.FTSealed, storiface.PathSealing, storiface.AcquireMove), func(ctx context.Context, w Worker) error {
+		//log.Debugf("huanghai, 进入 func (m *Manager) SealCommit1, 并执行 rpc  w.SealCommit1, 此时应该去查看 worker 的日志进行对比")
 		err := m.startWork(ctx, w, wk)(w.SealCommit1(ctx, sector, ticket, seed, pieces, cids))
 		if err != nil {
 			return err
@@ -524,6 +534,7 @@ func (m *Manager) SealCommit2(ctx context.Context, sector storage.SectorRef, pha
 	selector := newTaskSelector()
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTCommit2, selector, schedNop, func(ctx context.Context, w Worker) error {
+		//log.Debugf("huanghai, 进入 func (m *Manager) SealCommit2, 并执行 rpc  w.SealCommit2, 此时应该去查看 worker 的日志进行对比")
 		err := m.startWork(ctx, w, wk)(w.SealCommit2(ctx, sector, phase1Out))
 		if err != nil {
 			return err
@@ -565,6 +576,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 	err := m.sched.Schedule(ctx, sector, sealtasks.TTFinalize, selector,
 		m.schedFetch(sector, storiface.FTCache|storiface.FTSealed|unsealed, storiface.PathSealing, storiface.AcquireMove),
 		func(ctx context.Context, w Worker) error {
+			//log.Debugf("huanghai, 进入 func (m *Manager) FinalizeSector, 并执行 rpc  w.FinalizeSector, 此时应该去查看 worker 的日志进行对比")
 			_, err := m.waitSimpleCall(ctx)(w.FinalizeSector(ctx, sector, keepUnsealed))
 			return err
 		})
@@ -583,6 +595,7 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTFetch, fetchSel,
 		m.schedFetch(sector, storiface.FTCache|storiface.FTSealed|moveUnsealed, storiface.PathStorage, storiface.AcquireMove),
 		func(ctx context.Context, w Worker) error {
+			//log.Debugf("huanghai, 进入 func (m *Manager) FinalizeSector, 并执行 rpc  w.MoveStorage, 此时应该去查看 worker 的日志进行对比")
 			_, err := m.waitSimpleCall(ctx)(w.MoveStorage(ctx, sector, storiface.FTCache|storiface.FTSealed|moveUnsealed))
 			return err
 		})

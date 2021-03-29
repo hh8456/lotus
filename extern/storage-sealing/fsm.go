@@ -17,6 +17,7 @@ import (
 )
 
 func (m *Sealing) Plan(events []statemachine.Event, user interface{}) (interface{}, uint64, error) {
+	log.Debugf("huanghai, (m *Sealing) Plan")
 	next, processed, err := m.plan(events, user.(*SectorInfo))
 	if err != nil || next == nil {
 		return nil, processed, err

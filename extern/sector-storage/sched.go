@@ -364,6 +364,7 @@ func (sh *scheduler) trySched() {
 	// Step 1
 	throttle := make(chan struct{}, windowsLen)
 
+	log.Debugf("huanghai, 这里调度了 %d 个任务", queuneLen)
 	var wg sync.WaitGroup
 	wg.Add(queuneLen)
 	for i := 0; i < queuneLen; i++ {

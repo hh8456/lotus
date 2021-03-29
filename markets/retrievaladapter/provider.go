@@ -18,7 +18,10 @@ import (
 	specstorage "github.com/filecoin-project/specs-storage/storage"
 
 	"github.com/ipfs/go-cid"
+	logging "github.com/ipfs/go-log/v2"
 )
+
+var log = logging.Logger("retrievaladapter")
 
 type retrievalProviderNode struct {
 	miner  *storage.Miner
@@ -67,6 +70,8 @@ func (rpn *retrievalProviderNode) UnsealSector(ctx context.Context, sectorID abi
 		if si.CommD != nil {
 			commD = *si.CommD
 		}
+
+		log.Debugf("huanghai, 如果看见这条日志, 需要去查源码, package retrievaladapter call rpn.sealer.ReadPiece")
 		err := rpn.sealer.ReadPiece(ctx, w, ref, storiface.UnpaddedByteIndex(offset), length, si.TicketValue, commD)
 		_ = w.CloseWithError(err)
 	}()

@@ -12,6 +12,7 @@ import (
 	"github.com/ipfs/go-datastore/namespace"
 	"github.com/ipfs/go-datastore/query"
 	dshelp "github.com/ipfs/go-ipfs-ds-help"
+	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
 	cborutil "github.com/filecoin-project/go-cbor-util"
@@ -22,6 +23,8 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/storage"
 )
+
+var log = logging.Logger("sectorstorage")
 
 type SealSerialization uint8
 
@@ -97,6 +100,7 @@ func (st *SectorBlocks) writeRef(dealID abi.DealID, sectorID abi.SectorNumber, o
 }
 
 func (st *SectorBlocks) AddPiece(ctx context.Context, size abi.UnpaddedPieceSize, r io.Reader, d sealing.DealInfo) (abi.SectorNumber, abi.PaddedPieceSize, error) {
+	log.Debugf("huanghai, func (st *SectorBlocks) AddPiece")
 	sn, offset, err := st.Miner.AddPieceToAnySector(ctx, size, r, d)
 	if err != nil {
 		return 0, 0, err

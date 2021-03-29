@@ -214,6 +214,7 @@ var returnFunc = map[ReturnType]func(context.Context, storiface.CallID, storifac
 }
 
 func (l *LocalWorker) asyncCall(ctx context.Context, sector storage.SectorRef, rt ReturnType, work func(ctx context.Context, ci storiface.CallID) (interface{}, error)) (storiface.CallID, error) {
+	log.Debugf("huanghai, 进入 func (l *LocalWorker) asyncCall")
 	ci := storiface.CallID{
 		Sector: sector.ID,
 		ID:     uuid.New(),
@@ -321,9 +322,11 @@ func (l *LocalWorker) Fetch(ctx context.Context, sector storage.SectorRef, fileT
 }
 
 func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (storiface.CallID, error) {
+	log.Debugf("huanghai, 进入 func (l *LocalWorker) SealPreCommit1")
 	return l.asyncCall(ctx, sector, SealPreCommit1, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
 
 		{
+			log.Debugf("huanghai, 在 asyncCall  中执行 SealPreCommit1")
 			// cleanup previous failed attempts if they exist
 			if err := l.storage.Remove(ctx, sector.ID, storiface.FTSealed, true); err != nil {
 				return nil, xerrors.Errorf("cleaning up sealed data: %w", err)
@@ -339,11 +342,13 @@ func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorR
 			return nil, err
 		}
 
+		log.Debugf("huanghai, 在 asyncCall 中 rust [可能] 即将执行 SealPreCommit1, 并通知 miner")
 		return sb.SealPreCommit1(ctx, sector, ticket, pieces)
 	})
 }
 
 func (l *LocalWorker) SealPreCommit2(ctx context.Context, sector storage.SectorRef, phase1Out storage.PreCommit1Out) (storiface.CallID, error) {
+	//log.Debugf("huanghai, 进入 func (l *LocalWorker) SealPreCommit2")
 	sb, err := l.executor()
 	if err != nil {
 		return storiface.UndefCall, err

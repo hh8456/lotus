@@ -100,6 +100,7 @@ type trackedWorker struct {
 }
 
 func (t *trackedWorker) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (storiface.CallID, error) {
+	log.Debugf("huanghai, 进入 func (t *trackedWorker) SealPreCommit1")
 	return t.tracker.track(t.wid, sector, sealtasks.TTPreCommit1)(t.Worker.SealPreCommit1(ctx, sector, ticket, pieces))
 }
 

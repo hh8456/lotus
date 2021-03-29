@@ -24,6 +24,7 @@ type schedWorker struct {
 
 // context only used for startup
 func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
+	log.Debugf("huanghai, func (sh *scheduler) runWorker")
 	info, err := w.Info(ctx)
 	if err != nil {
 		return xerrors.Errorf("getting worker info: %w", err)
@@ -112,6 +113,7 @@ func (sw *schedWorker) handleWorker() {
 
 			// ask for more windows if we need them (non-blocking)
 			if enabled {
+				log.Debugf("huanghai, ask for more windows if we need them (non-blocking)")
 				if !sw.requestWindows() {
 					return // graceful shutdown
 				}
@@ -142,6 +144,7 @@ func (sw *schedWorker) handleWorker() {
 			// to finish precessing a task
 			update, pokeSched, ok := sw.waitForUpdates()
 			if !ok {
+				log.Debugf("huanghai, sw.waitForUpdates return false, now return")
 				return
 			}
 			if pokeSched {
@@ -220,6 +223,9 @@ func (sw *schedWorker) checkSession(ctx context.Context) bool {
 			case <-sw.heartbeatTimer.C:
 				continue
 			case w := <-sw.scheduledWindows:
+				log.Debugf("huanghai, func (sw *schedWorker) checkSession, " +
+					"sw.worker.activeWindows = append(... , w(:= <-sw.sche" +
+					"duledWindows)), ")
 				// was in flight when initially disabled, return
 				sw.worker.wndLk.Lock()
 				sw.worker.activeWindows = append(sw.worker.activeWindows, w)
@@ -250,6 +256,9 @@ func (sw *schedWorker) checkSession(ctx context.Context) bool {
 }
 
 func (sw *schedWorker) requestWindows() bool {
+	log.Debugf("huanghai, func (sw *schedWorker) requestWindows, "+
+		"sw.sched.windowRequests <- &schedWindowRequest{sw.wid = "+
+		"%s, sw.scheduledWindows = %v}", sw.wid, sw.scheduledWindows)
 	for ; sw.windowsRequested < SchedWindows; sw.windowsRequested++ {
 		select {
 		case sw.sched.windowRequests <- &schedWindowRequest{
@@ -270,11 +279,18 @@ func (sw *schedWorker) waitForUpdates() (update bool, sched bool, ok bool) {
 	case <-sw.heartbeatTimer.C:
 		return false, false, true
 	case w := <-sw.scheduledWindows:
+		log.Debugf("huanghai, func (sw *schedWorker) waitForUpdates, "+
+			"case w := <-sw.scheduledWindows, "+
+			"sw.worker.activeWindows = append(... , w(:= <-sw.sche"+
+			"duledWindows)), w = %v", w)
 		sw.worker.wndLk.Lock()
 		sw.worker.activeWindows = append(sw.worker.activeWindows, w)
 		sw.worker.wndLk.Unlock()
 		return true, false, true
 	case <-sw.taskDone:
+		log.Debugf("huanghai, func (sw *schedWorker) waitForUpdates, " +
+			"case w := <-sw.taskDone")
+
 		log.Debugw("task done", "workerid", sw.wid)
 		return true, true, true
 	case <-sw.sched.closing:
@@ -359,6 +375,7 @@ assignLoop:
 			}
 			worker.lk.Unlock()
 
+			log.Debugf("huanghai, tidx = %d, 如果 tidx != 1 表示有可用的 worker", tidx)
 			if tidx == -1 {
 				break assignLoop
 			}
@@ -397,6 +414,10 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, req *workerRe
 	w.lk.Unlock()
 
 	go func() {
+		log.Debugf("huanghai, enter func (sw *schedWorker) startProcessingTask, "+
+			"taskType: %s, needRes: %v, workerRes: %v, make new workTracker object",
+			req.taskType, needRes, w.info.Resources)
+
 		// first run the prepare step (e.g. fetching sector data from other worker)
 		err := req.prepare(req.ctx, sh.workTracker.worker(sw.wid, w.workerRpc))
 		sh.workersLk.Lock()
