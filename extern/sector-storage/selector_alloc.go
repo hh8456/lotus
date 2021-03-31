@@ -27,6 +27,7 @@ func newAllocSelector(index stores.SectorIndex, alloc storiface.SectorFileType, 
 }
 
 func (s *allocSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *workerHandle) (bool, error) {
+	log.Debugf("huanghai, enter func (s *allocSelector) Ok")
 	tasks, err := whnd.workerRpc.TaskTypes(ctx)
 	if err != nil {
 		return false, xerrors.Errorf("getting supported worker task types: %w", err)

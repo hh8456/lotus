@@ -214,7 +214,7 @@ var returnFunc = map[ReturnType]func(context.Context, storiface.CallID, storifac
 }
 
 func (l *LocalWorker) asyncCall(ctx context.Context, sector storage.SectorRef, rt ReturnType, work func(ctx context.Context, ci storiface.CallID) (interface{}, error)) (storiface.CallID, error) {
-	log.Debugf("huanghai, 进入 func (l *LocalWorker) asyncCall")
+	log.Debugf("huanghai, 进入 func (l *LocalWorker) asyncCall, ReturnType: %s", rt)
 	ci := storiface.CallID{
 		Sector: sector.ID,
 		ID:     uuid.New(),
@@ -337,12 +337,13 @@ func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorR
 			}
 		}
 
+		log.Debugf("huanghai, 在 func (l *LocalWorker) SealPreCommit1 中即将执行 l.executor()")
 		sb, err := l.executor()
 		if err != nil {
 			return nil, err
 		}
 
-		log.Debugf("huanghai, 在 asyncCall 中 rust [可能] 即将执行 SealPreCommit1, 并通知 miner")
+		log.Debugf("huanghai, 在 asyncCall 中 rust [可能] 即将执行 SealPreCommit1 ")
 		return sb.SealPreCommit1(ctx, sector, ticket, pieces)
 	})
 }

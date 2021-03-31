@@ -20,6 +20,7 @@ func newTaskSelector() *taskSelector {
 }
 
 func (s *taskSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, whnd *workerHandle) (bool, error) {
+	log.Debugf("huanghai, enter func (s *taskSelector) Ok")
 	tasks, err := whnd.workerRpc.TaskTypes(ctx)
 	if err != nil {
 		return false, xerrors.Errorf("getting supported worker task types: %w", err)
@@ -30,6 +31,7 @@ func (s *taskSelector) Ok(ctx context.Context, task sealtasks.TaskType, spt abi.
 }
 
 func (s *taskSelector) Cmp(ctx context.Context, _ sealtasks.TaskType, a, b *workerHandle) (bool, error) {
+	log.Debugf("huanghai, enter func (s *taskSelector) Cmp")
 	atasks, err := a.workerRpc.TaskTypes(ctx)
 	if err != nil {
 		return false, xerrors.Errorf("getting supported worker task types: %w", err)
