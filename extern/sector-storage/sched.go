@@ -231,10 +231,13 @@ func (sh *scheduler) runSched() {
 		select {
 		case <-sh.workerChange:
 			doSched = true
+			log.Debugf("huanghai, func (sh *scheduler) runSched, case <-sh.workerChange:")
 		case dreq := <-sh.workerDisable:
 			toDisable = append(toDisable, dreq)
 			doSched = true
+			log.Debugf("huanghai, func (sh *scheduler) runSched, case dreq := <-sh.workerDisable:")
 		case req := <-sh.schedule:
+			log.Debugf("huanghai, func (sh *scheduler) runSched, case req := <-sh.schedule:, req.taskType: %s", req.taskType)
 			sh.schedQueue.Push(req)
 			doSched = true
 
@@ -242,6 +245,7 @@ func (sh *scheduler) runSched() {
 				sh.testSync <- struct{}{}
 			}
 		case req := <-sh.windowRequests:
+			log.Debugf("huanghai, func (sh *scheduler) runSched, case req := <-sh.windowRequests:")
 			sh.openWindows = append(sh.openWindows, req)
 			doSched = true
 		case ireq := <-sh.info:
@@ -265,13 +269,16 @@ func (sh *scheduler) runSched() {
 				case <-sh.workerChange:
 				case dreq := <-sh.workerDisable:
 					toDisable = append(toDisable, dreq)
+					log.Debugf("huanghai, func (sh *scheduler) runSched, loop:, dreq := <-sh.workerDisable")
 				case req := <-sh.schedule:
 					sh.schedQueue.Push(req)
+					log.Debugf("huanghai, func (sh *scheduler) runSched, loop:, case req := <-sh.schedule:, req.taskType: %s", req.taskType)
 					if sh.testSync != nil {
 						sh.testSync <- struct{}{}
 					}
 				case req := <-sh.windowRequests:
 					sh.openWindows = append(sh.openWindows, req)
+					log.Debugf("huanghai, func (sh *scheduler) runSched, loop:, case req := <-sh.windowRequests:")
 				default:
 					break loop
 				}
@@ -280,6 +287,7 @@ func (sh *scheduler) runSched() {
 			for _, req := range toDisable {
 				for _, window := range req.activeWindows {
 					for _, request := range window.todo {
+						log.Debugf("huanghai, func (sh *scheduler) runSched, for _, request := range window.todo, request.taskType: %s", request.taskType)
 						sh.schedQueue.Push(request)
 					}
 				}
@@ -297,9 +305,11 @@ func (sh *scheduler) runSched() {
 				sh.workersLk.Unlock()
 
 				req.done()
+				log.Debugf("huanghai, func (sh *scheduler) runSched, for _, req := range toDisable")
 			}
 
 			sh.trySched()
+			log.Debugf("huanghai, func (sh *scheduler) runSched, sh.trySched()")
 		}
 
 	}
@@ -364,7 +374,6 @@ func (sh *scheduler) trySched() {
 	// Step 1
 	throttle := make(chan struct{}, windowsLen)
 
-	log.Debugf("huanghai, 这里调度了 %d 个任务", queuneLen)
 	var wg sync.WaitGroup
 	wg.Add(queuneLen)
 	for i := 0; i < queuneLen; i++ {
@@ -377,6 +386,7 @@ func (sh *scheduler) trySched() {
 			}()
 
 			task := (*sh.schedQueue)[sqi]
+			log.Debugf("huanghai, 调度任务类型: %s", task.taskType)
 			needRes := ResourceTable[task.taskType][task.sector.ProofType]
 
 			task.indexHeap = sqi

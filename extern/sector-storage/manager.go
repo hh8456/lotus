@@ -458,6 +458,7 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	log.Debugf("huanghai, 进入 func (m *Manager) SealCommit1")
 	wk, wait, cancel, err := m.getWork(ctx, sealtasks.TTCommit1, sector, ticket, seed, pieces, cids)
 	if err != nil {
 		return storage.Commit1Out{}, xerrors.Errorf("getWork: %w", err)
@@ -491,7 +492,7 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, false)
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTCommit1, selector, m.schedFetch(sector, storiface.FTCache|storiface.FTSealed, storiface.PathSealing, storiface.AcquireMove), func(ctx context.Context, w Worker) error {
-		//log.Debugf("huanghai, 进入 func (m *Manager) SealCommit1, 并执行 rpc  w.SealCommit1, 此时应该去查看 worker 的日志进行对比")
+		log.Debugf("huanghai, 进入 func (m *Manager) SealCommit1, 并执行 rpc  w.SealCommit1, 此时应该去查看 worker 的日志进行对比")
 		err := m.startWork(ctx, w, wk)(w.SealCommit1(ctx, sector, ticket, seed, pieces, cids))
 		if err != nil {
 			return err
@@ -508,6 +509,7 @@ func (m *Manager) SealCommit1(ctx context.Context, sector storage.SectorRef, tic
 }
 
 func (m *Manager) SealCommit2(ctx context.Context, sector storage.SectorRef, phase1Out storage.Commit1Out) (out storage.Proof, err error) {
+	log.Debugf("huanghai, 进入 func (m *Manager) SealCommit2")
 	wk, wait, cancel, err := m.getWork(ctx, sealtasks.TTCommit2, sector, phase1Out)
 	if err != nil {
 		return storage.Proof{}, xerrors.Errorf("getWork: %w", err)
@@ -534,7 +536,7 @@ func (m *Manager) SealCommit2(ctx context.Context, sector storage.SectorRef, pha
 	selector := newTaskSelector()
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTCommit2, selector, schedNop, func(ctx context.Context, w Worker) error {
-		//log.Debugf("huanghai, 进入 func (m *Manager) SealCommit2, 并执行 rpc  w.SealCommit2, 此时应该去查看 worker 的日志进行对比")
+		log.Debugf("huanghai, 进入 func (m *Manager) SealCommit2, 并执行 rpc  w.SealCommit2, 此时应该去查看 worker 的日志进行对比")
 		err := m.startWork(ctx, w, wk)(w.SealCommit2(ctx, sector, phase1Out))
 		if err != nil {
 			return err

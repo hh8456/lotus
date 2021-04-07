@@ -349,7 +349,7 @@ func (l *LocalWorker) SealPreCommit1(ctx context.Context, sector storage.SectorR
 }
 
 func (l *LocalWorker) SealPreCommit2(ctx context.Context, sector storage.SectorRef, phase1Out storage.PreCommit1Out) (storiface.CallID, error) {
-	//log.Debugf("huanghai, 进入 func (l *LocalWorker) SealPreCommit2")
+	log.Debugf("huanghai, 进入 func (l *LocalWorker) SealPreCommit2, 即将调用 l.asyncCall -> sb.SealPreCommit2")
 	sb, err := l.executor()
 	if err != nil {
 		return storiface.UndefCall, err
