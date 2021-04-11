@@ -49,6 +49,7 @@ type WorkerSelector interface {
 	Ok(ctx context.Context, task sealtasks.TaskType, spt abi.RegisteredSealProof, a *workerHandle) (bool, error) // true if worker is acceptable for performing a task
 
 	Cmp(ctx context.Context, task sealtasks.TaskType, a, b *workerHandle) (bool, error) // true if a is preferred over b
+	FindDataWorker(ctx context.Context, task sealtasks.TaskType, sid abi.SectorID, spt abi.RegisteredSealProof, whnd *workerHandle) bool
 }
 
 type scheduler struct {
@@ -92,6 +93,8 @@ type workerHandle struct {
 	cleanupStarted bool
 	closedMgr      chan struct{}
 	closingMgr     chan struct{}
+	workerOnFree   chan struct{}
+	todo           []*workerRequest
 }
 
 type schedWindowRequest struct {
@@ -106,6 +109,7 @@ type schedWindow struct {
 }
 
 type workerDisableReq struct {
+	todo          []*workerRequest
 	activeWindows []*schedWindow
 	wid           WorkerID
 	done          func()
@@ -226,16 +230,19 @@ func (sh *scheduler) runSched() {
 
 	for {
 		var doSched bool
+		// huanghai toDisable 是断线的 worker
 		var toDisable []workerDisableReq
 
 		select {
+		// worker 完成任务时接到通知:
+		// seal/v0/addpiece - seal/v0/precommit/1 - seal/v0/precommit/2 - seal/v0/commit/1 - seal/v0/commit/2
+		// FinalizeSector - Fetch
 		case <-sh.workerChange:
 			doSched = true
-			log.Debugf("huanghai, func (sh *scheduler) runSched, case <-sh.workerChange:")
+			// worker 断线
 		case dreq := <-sh.workerDisable:
 			toDisable = append(toDisable, dreq)
 			doSched = true
-			log.Debugf("huanghai, func (sh *scheduler) runSched, case dreq := <-sh.workerDisable:")
 		case req := <-sh.schedule:
 			log.Debugf("huanghai, func (sh *scheduler) runSched, case req := <-sh.schedule:, req.taskType: %s", req.taskType)
 			sh.schedQueue.Push(req)
@@ -263,13 +270,14 @@ func (sh *scheduler) runSched() {
 		if doSched && initialised {
 			// First gather any pending tasks, so we go through the scheduling loop
 			// once for every added task
+
+			//huanghai, loop 的代码冗余, 可以参考默然的代码进行简化
 		loop:
 			for {
 				select {
 				case <-sh.workerChange:
 				case dreq := <-sh.workerDisable:
 					toDisable = append(toDisable, dreq)
-					log.Debugf("huanghai, func (sh *scheduler) runSched, loop:, dreq := <-sh.workerDisable")
 				case req := <-sh.schedule:
 					sh.schedQueue.Push(req)
 					log.Debugf("huanghai, func (sh *scheduler) runSched, loop:, case req := <-sh.schedule:, req.taskType: %s", req.taskType)
@@ -278,16 +286,16 @@ func (sh *scheduler) runSched() {
 					}
 				case req := <-sh.windowRequests:
 					sh.openWindows = append(sh.openWindows, req)
-					log.Debugf("huanghai, func (sh *scheduler) runSched, loop:, case req := <-sh.windowRequests:")
 				default:
 					break loop
 				}
 			}
 
+			// huanghai worker 断线后,必然会执行下面的 for 循环
 			for _, req := range toDisable {
+				// huanghai 不质押扇区, worker 断线后,并不会执行下面的 for 循环
 				for _, window := range req.activeWindows {
 					for _, request := range window.todo {
-						log.Debugf("huanghai, func (sh *scheduler) runSched, for _, request := range window.todo, request.taskType: %s", request.taskType)
 						sh.schedQueue.Push(request)
 					}
 				}
@@ -305,11 +313,9 @@ func (sh *scheduler) runSched() {
 				sh.workersLk.Unlock()
 
 				req.done()
-				log.Debugf("huanghai, func (sh *scheduler) runSched, for _, req := range toDisable")
 			}
 
 			sh.trySched()
-			log.Debugf("huanghai, func (sh *scheduler) runSched, sh.trySched()")
 		}
 
 	}
@@ -339,6 +345,79 @@ func (sh *scheduler) diag() SchedDiagInfo {
 }
 
 func (sh *scheduler) trySched() {
+	sh.workersLk.Lock()
+	defer sh.workersLk.Unlock()
+
+	log.Debugf("trySched %d queued", sh.schedQueue.Len())
+	for sqi := 0; sqi < sh.schedQueue.Len(); sqi++ { // 遍历任务列表
+		task := (*sh.schedQueue)[sqi]
+
+		tried := 0
+		var acceptable []WorkerID
+		var freetable []int
+		best := 0
+		localWorker := false
+		for wid, worker := range sh.workers {
+			if !worker.enabled {
+				continue
+			}
+
+			if task.taskType == sealtasks.TTPreCommit1 || task.taskType == sealtasks.TTPreCommit2 || task.taskType == sealtasks.TTCommit1 {
+				if isExist := task.sel.FindDataWorker(task.ctx, task.taskType, task.sector.ID, task.sector.ProofType, worker); !isExist {
+					continue
+				}
+			}
+
+			ok, err := task.sel.Ok(task.ctx, task.taskType, task.sector.ProofType, worker)
+			if err != nil || !ok {
+				continue
+			}
+
+			//freecount := sh.getTaskFreeCount(wid, task.taskType)
+			//if freecount <= 0 {
+			//continue
+			//}
+			tried++
+			//freetable = append(freetable, freecount)
+			acceptable = append(acceptable, wid)
+
+			if isExist := task.sel.FindDataWorker(task.ctx, task.taskType, task.sector.ID, task.sector.ProofType, worker); isExist {
+				localWorker = true
+				break
+			}
+		}
+
+		if len(acceptable) > 0 {
+			if localWorker {
+				best = len(acceptable) - 1
+			} else {
+				max := 0
+				for i, v := range freetable {
+					if v > max {
+						max = v
+						best = i
+					}
+				}
+			}
+
+			wid := acceptable[best]
+			whl := sh.workers[wid]
+			log.Infof("huanghai, worker %s , worker id: %s, will be do the %+v jobTask!", whl.info.Hostname, wid, task.taskType)
+			sh.schedQueue.Remove(sqi)
+			sqi--
+			if err := sh.assignWorker(wid, whl, task); err != nil {
+				log.Error("assignWorker error: %+v", err)
+				go task.respond(xerrors.Errorf("assignWorker error: %w", err))
+			}
+		}
+
+		if tried == 0 {
+			log.Infof("no worker do the %+v jobTask!", task.taskType)
+		}
+	}
+}
+
+func (sh *scheduler) trySched1() {
 	/*
 		This assigns tasks to workers based on:
 		- Task priority (achieved by handling sh.schedQueue in order, since it's already sorted by priority)
@@ -387,6 +466,25 @@ func (sh *scheduler) trySched() {
 
 			task := (*sh.schedQueue)[sqi]
 			log.Debugf("huanghai, 调度任务类型: %s", task.taskType)
+
+			// TODO
+			for wid, worker := range sh.workers {
+				if !worker.enabled {
+					log.Debugf("huanghai, worker id: %s, worker.enabled = false", wid)
+					continue
+				}
+
+				task.sel.FindDataWorker(task.ctx, task.taskType, task.sector.ID, task.sector.ProofType, worker)
+			}
+
+			// 如果 task.taskType == sealtasks.TTPreCommit2 , 就把 p1, p2 放一起做
+			// 把 p1, p2 放一起做; p1 完成时,扇区状态是 sealtasks.TTPreCommit2
+			//if task.taskType == sealtasks.TTPreCommit2 {
+			//task.sel.Ok(task.ctx, task.taskType, task.sector.ID, task.sector.ProofType, nil)
+			//}
+
+			// 参考默然代码
+
 			needRes := ResourceTable[task.taskType][task.sector.ProofType]
 
 			task.indexHeap = sqi
@@ -578,5 +676,77 @@ func (sh *scheduler) Close(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+	return nil
+}
+
+func (sh *scheduler) assignWorker(wid WorkerID, w *workerHandle, req *workerRequest) error {
+	//sh.taskAddOne(wid, req.taskType)
+	needRes := ResourceTable[req.taskType][req.sector.ProofType]
+
+	w.lk.Lock()
+	w.preparing.add(w.info.Resources, needRes)
+	w.lk.Unlock()
+
+	go func() {
+		err := req.prepare(req.ctx, sh.workTracker.worker(wid, w.workerRpc)) // fetch扇区
+		sh.workersLk.Lock()
+
+		if err != nil {
+			//sh.taskReduceOne(wid, req.taskType)
+			w.lk.Lock()
+			w.preparing.free(w.info.Resources, needRes)
+			w.lk.Unlock()
+			sh.workersLk.Unlock()
+
+			select {
+			case w.workerOnFree <- struct{}{}:
+			case <-sh.closing:
+				log.Warnf("scheduler closed while sending response (prepare error: %+v)", err)
+			}
+
+			select {
+			case req.ret <- workerResponse{err: err}:
+			case <-req.ctx.Done():
+				log.Warnf("request got cancelled before we could respond (prepare error: %+v)", err)
+			case <-sh.closing:
+				log.Warnf("scheduler closed while sending response (prepare error: %+v)", err)
+			}
+			return
+		}
+
+		err = w.active.withResources(wid, w.info.Resources, needRes, &sh.workersLk, func() error {
+			w.lk.Lock()
+			w.preparing.free(w.info.Resources, needRes)
+			w.lk.Unlock()
+			sh.workersLk.Unlock()
+			defer sh.workersLk.Lock() // we MUST return locked from this function
+
+			select {
+			case w.workerOnFree <- struct{}{}:
+			case <-sh.closing:
+			}
+
+			err = req.work(req.ctx, sh.workTracker.worker(wid, w.workerRpc))
+			//sh.taskReduceOne(wid, req.taskType)
+
+			select {
+			case req.ret <- workerResponse{err: err}:
+			case <-req.ctx.Done():
+				log.Warnf("request got cancelled before we could respond")
+			case <-sh.closing:
+				log.Warnf("scheduler closed while sending response")
+			}
+
+			return nil
+		})
+
+		sh.workersLk.Unlock()
+
+		// This error should always be nil, since nothing is setting it, but just to be safe:
+		if err != nil {
+			log.Errorf("error executing worker (withResources): %+v", err)
+		}
+	}()
+
 	return nil
 }

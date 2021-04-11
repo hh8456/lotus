@@ -70,3 +70,61 @@ func (s *allocSelector) Cmp(ctx context.Context, task sealtasks.TaskType, a, b *
 }
 
 var _ WorkerSelector = &allocSelector{}
+
+func (s *allocSelector) FindDataWorker(ctx context.Context, task sealtasks.TaskType, sid abi.SectorID, spt abi.RegisteredSealProof, whnd *workerHandle) bool {
+	paths, e0 := whnd.workerRpc.Paths(ctx)
+	if e0 != nil {
+		log.Debugf("huanghai, whnd.workerRpc.Paths() error: %v", e0)
+		return false
+	}
+
+	// 搜集这个 worker 的所有扇区 id
+	have := map[stores.ID]struct{}{}
+	for _, path := range paths {
+		have[path.ID] = struct{}{}
+	}
+
+	var ft storiface.SectorFileType
+	switch task {
+	case sealtasks.TTAddPiece:
+		ft = 0
+
+	case sealtasks.TTPreCommit1:
+		ft = storiface.FTUnsealed
+
+	case sealtasks.TTPreCommit2:
+		ft = storiface.FTCache | storiface.FTSealed
+
+	case sealtasks.TTCommit1:
+		ft = storiface.FTCache | storiface.FTSealed
+
+	case sealtasks.TTCommit2:
+		ft = storiface.FTCache | storiface.FTSealed
+
+	case sealtasks.TTFinalize:
+		ft = storiface.FTCache | storiface.FTSealed
+
+	case sealtasks.TTFetch:
+		ft = storiface.FTCache | storiface.FTSealed | storiface.FTUnsealed
+	}
+
+	ssize, e1 := spt.SectorSize()
+	if e1 != nil {
+		log.Debugf("huanghai, spt.SectorSize() error: %v", e1)
+		return false
+	}
+
+	sectorsInfoList, e2 := s.index.StorageFindSector(ctx, sid, ft, ssize, false)
+	if e2 != nil {
+		log.Debugf("huanghai, s.index.StorageFindSector() error: %v", e2)
+		return false
+	}
+
+	for _, sectorsInfo := range sectorsInfoList {
+		if _, ok := have[sectorsInfo.ID]; ok {
+			return true
+		}
+	}
+
+	return false
+}

@@ -1617,27 +1617,27 @@ func (w *WorkerStruct) AddPiece(ctx context.Context, sector storage.SectorRef, p
 }
 
 func (w *WorkerStruct) SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (storiface.CallID, error) {
-	log.Debugf("huanghai, 进入 func (w *WorkerStruct) SealPreCommit1")
+	//log.Debugf("huanghai, 进入 func (w *WorkerStruct) SealPreCommit1")
 	return w.Internal.SealPreCommit1(ctx, sector, ticket, pieces)
 }
 
 func (w *WorkerStruct) SealPreCommit2(ctx context.Context, sector storage.SectorRef, pc1o storage.PreCommit1Out) (storiface.CallID, error) {
-	log.Debugf("huanghai, 进入 func (w *WorkerStruct) SealPreCommit2")
+	//log.Debugf("huanghai, 进入 func (w *WorkerStruct) SealPreCommit2")
 	return w.Internal.SealPreCommit2(ctx, sector, pc1o)
 }
 
 func (w *WorkerStruct) SealCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, seed abi.InteractiveSealRandomness, pieces []abi.PieceInfo, cids storage.SectorCids) (storiface.CallID, error) {
-	log.Debugf("huanghai, 进入 func (w *WorkerStruct) SealCommit1")
+	//log.Debugf("huanghai, 进入 func (w *WorkerStruct) SealCommit1")
 	return w.Internal.SealCommit1(ctx, sector, ticket, seed, pieces, cids)
 }
 
 func (w *WorkerStruct) SealCommit2(ctx context.Context, sector storage.SectorRef, c1o storage.Commit1Out) (storiface.CallID, error) {
-	log.Debugf("huanghai, 进入 func (w *WorkerStruct) SealCommit2")
+	//log.Debugf("huanghai, 进入 func (w *WorkerStruct) SealCommit2")
 	return w.Internal.SealCommit2(ctx, sector, c1o)
 }
 
 func (w *WorkerStruct) FinalizeSector(ctx context.Context, sector storage.SectorRef, keepUnsealed []storage.Range) (storiface.CallID, error) {
-	log.Debugf("huanghai, 进入 func (w *WorkerStruct) FinalizeSector")
+	//log.Debugf("huanghai, 进入 func (w *WorkerStruct) FinalizeSector")
 	return w.Internal.FinalizeSector(ctx, sector, keepUnsealed)
 }
 
@@ -1646,7 +1646,7 @@ func (w *WorkerStruct) ReleaseUnsealed(ctx context.Context, sector storage.Secto
 }
 
 func (w *WorkerStruct) MoveStorage(ctx context.Context, sector storage.SectorRef, types storiface.SectorFileType) (storiface.CallID, error) {
-	log.Debugf("huanghai, 进入 func (w *WorkerStruct) MoveStorage")
+	//log.Debugf("huanghai, 进入 func (w *WorkerStruct) MoveStorage")
 	return w.Internal.MoveStorage(ctx, sector, types)
 }
 

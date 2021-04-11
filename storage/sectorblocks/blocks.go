@@ -100,7 +100,7 @@ func (st *SectorBlocks) writeRef(dealID abi.DealID, sectorID abi.SectorNumber, o
 }
 
 func (st *SectorBlocks) AddPiece(ctx context.Context, size abi.UnpaddedPieceSize, r io.Reader, d sealing.DealInfo) (abi.SectorNumber, abi.PaddedPieceSize, error) {
-	log.Debugf("huanghai, func (st *SectorBlocks) AddPiece")
+	//log.Debugf("huanghai, func (st *SectorBlocks) AddPiece")
 	sn, offset, err := st.Miner.AddPieceToAnySector(ctx, size, r, d)
 	if err != nil {
 		return 0, 0, err
