@@ -252,7 +252,7 @@ func (sh *scheduler) runSched() {
 				sh.testSync <- struct{}{}
 			}
 		case req := <-sh.windowRequests:
-			log.Debugf("huanghai, func (sh *scheduler) runSched, case req := <-sh.windowRequests:")
+			//log.Debugf("huanghai, func (sh *scheduler) runSched, case req := <-sh.windowRequests:")
 			sh.openWindows = append(sh.openWindows, req)
 			doSched = true
 		case ireq := <-sh.info:
@@ -280,7 +280,6 @@ func (sh *scheduler) runSched() {
 					toDisable = append(toDisable, dreq)
 				case req := <-sh.schedule:
 					sh.schedQueue.Push(req)
-					log.Debugf("huanghai, func (sh *scheduler) runSched, loop:, case req := <-sh.schedule:, req.taskType: %s", req.taskType)
 					if sh.testSync != nil {
 						sh.testSync <- struct{}{}
 					}
@@ -465,7 +464,7 @@ func (sh *scheduler) trySched1() {
 			}()
 
 			task := (*sh.schedQueue)[sqi]
-			log.Debugf("huanghai, 调度任务类型: %s", task.taskType)
+			//log.Debugf("huanghai, 调度任务类型: %s", task.taskType)
 
 			// TODO
 			for wid, worker := range sh.workers {
@@ -476,14 +475,6 @@ func (sh *scheduler) trySched1() {
 
 				task.sel.FindDataWorker(task.ctx, task.taskType, task.sector.ID, task.sector.ProofType, worker)
 			}
-
-			// 如果 task.taskType == sealtasks.TTPreCommit2 , 就把 p1, p2 放一起做
-			// 把 p1, p2 放一起做; p1 完成时,扇区状态是 sealtasks.TTPreCommit2
-			//if task.taskType == sealtasks.TTPreCommit2 {
-			//task.sel.Ok(task.ctx, task.taskType, task.sector.ID, task.sector.ProofType, nil)
-			//}
-
-			// 参考默然代码
 
 			needRes := ResourceTable[task.taskType][task.sector.ProofType]
 

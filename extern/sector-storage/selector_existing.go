@@ -102,6 +102,9 @@ func (s *existingSelector) FindDataWorker(ctx context.Context, task sealtasks.Ta
 		return false
 	}
 
+	log.Debugf("huanghai, func (s *existingSelector) FindDataWorker "+
+		"所有扇区 id: %v, 扇区 %s 的信息: %v", have, sid, best)
+
 	for _, info := range best {
 		if info.Weight != 0 { // 为0的权重是fecth来的，不是本地的
 			if _, ok := have[info.ID]; ok {

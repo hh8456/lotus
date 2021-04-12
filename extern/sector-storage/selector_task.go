@@ -68,6 +68,9 @@ func (s *taskSelector) FindDataWorker(ctx context.Context, task sealtasks.TaskTy
 		have[path.ID] = struct{}{}
 	}
 
+	log.Debugf("huanghai, func (s *taskSelector) FindDataWorker "+
+		"所有扇区 id: %v, 扇区 %s 的信息: %v", have, sid, s.best)
+
 	for _, info := range s.best {
 		if info.Weight != 0 { // 为0的权重是fecth来的，不是本地的
 			if _, ok := have[info.ID]; ok {

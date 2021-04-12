@@ -74,7 +74,7 @@ var _ WorkerSelector = &allocSelector{}
 func (s *allocSelector) FindDataWorker(ctx context.Context, task sealtasks.TaskType, sid abi.SectorID, spt abi.RegisteredSealProof, whnd *workerHandle) bool {
 	paths, e0 := whnd.workerRpc.Paths(ctx)
 	if e0 != nil {
-		log.Debugf("huanghai, whnd.workerRpc.Paths() error: %v", e0)
+		log.Debugf("huanghai, func (s *allocSelector) FindDataWorker, whnd.workerRpc.Paths() error: %v", e0)
 		return false
 	}
 
@@ -110,16 +110,18 @@ func (s *allocSelector) FindDataWorker(ctx context.Context, task sealtasks.TaskT
 
 	ssize, e1 := spt.SectorSize()
 	if e1 != nil {
-		log.Debugf("huanghai, spt.SectorSize() error: %v", e1)
+		log.Debugf("huanghai, func (s *allocSelector) FindDataWorker, spt.SectorSize() error: %v", e1)
 		return false
 	}
 
 	sectorsInfoList, e2 := s.index.StorageFindSector(ctx, sid, ft, ssize, false)
 	if e2 != nil {
-		log.Debugf("huanghai, s.index.StorageFindSector() error: %v", e2)
+		log.Debugf("huanghai, func (s *allocSelector) FindDataWorker, s.index.StorageFindSector() error: %v", e2)
 		return false
 	}
 
+	log.Debugf("huanghai, func (s *allocSelector) FindDataWorker "+
+		"所有扇区 id: %v, 扇区 %s 的信息: %v", have, sid, sectorsInfoList)
 	for _, sectorsInfo := range sectorsInfoList {
 		if _, ok := have[sectorsInfo.ID]; ok {
 			return true
