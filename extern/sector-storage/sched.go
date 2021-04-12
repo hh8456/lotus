@@ -57,13 +57,13 @@ type scheduler struct {
 	workers   map[WorkerID]*workerHandle
 
 	schedule       chan *workerRequest
-	windowRequests chan *schedWindowRequest
-	workerChange   chan struct{} // worker added / changed/freed resources
-	workerDisable  chan workerDisableReq
+	windowRequests chan *schedWindowRequest // 主动触发调度程序执行, jump to: sched.go - func (sh *scheduler) runSched()
+	workerChange   chan struct{}            // worker added / changed/freed resources
+	workerDisable  chan workerDisableReq    // worker 断线
 
 	// owned by the sh.runSched goroutine
-	schedQueue  *requestQueue
-	openWindows []*schedWindowRequest
+	schedQueue  *requestQueue         // 质押扇区, 下发 p1,p2,c1,c2 等任务时,会往 schedQueue 写入数据
+	openWindows []*schedWindowRequest // 保存 windowRequests 中的信息, openWindows 中要有数据,才能驱动调度程序
 
 	workTracker *workTracker
 
@@ -99,7 +99,9 @@ type workerHandle struct {
 
 type schedWindowRequest struct {
 	worker WorkerID
-
+	// 由于弃用官方调度源码 func (sh *scheduler) trySched1() 和
+	// sched_worker.go - func (sw *schedWorker) requestWindows() bool,
+	// 就没有其他地方往 done 压入数据而触发 sched.go - runSched()
 	done chan *schedWindow
 }
 
@@ -271,7 +273,6 @@ func (sh *scheduler) runSched() {
 			// First gather any pending tasks, so we go through the scheduling loop
 			// once for every added task
 
-			//huanghai, loop 的代码冗余, 可以参考默然的代码进行简化
 		loop:
 			for {
 				select {
@@ -670,6 +671,7 @@ func (sh *scheduler) Close(ctx context.Context) error {
 	return nil
 }
 
+// 这里是从 sched_worker.go - func (sw *schedWorker) startProcessingTask 修改的
 func (sh *scheduler) assignWorker(wid WorkerID, w *workerHandle, req *workerRequest) error {
 	//sh.taskAddOne(wid, req.taskType)
 	needRes := ResourceTable[req.taskType][req.sector.ProofType]

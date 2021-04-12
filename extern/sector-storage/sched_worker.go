@@ -15,8 +15,13 @@ type schedWorker struct {
 
 	wid WorkerID
 
-	heartbeatTimer   *time.Ticker
-	scheduledWindows chan *schedWindow
+	heartbeatTimer *time.Ticker
+
+	// 在 func (sw *schedWorker) requestWindows() bool 函数中, scheduledWindows 赋值给 type schedWindowRequest struct - done
+	// 由于弃用官方调度源码 func (sh *scheduler) trySched1() 和
+	// sched_worker.go - func (sw *schedWorker) requestWindows() bool,
+	// 就没有其他地方往 type schedWindowRequest struct - done 压入数据而触发 sched.go - runSched()
+	scheduledWindows chan *schedWindow // scheduledWindows 未使用, 直接导致 worker.activeWindows 未使用
 	taskDone         chan struct{}
 
 	windowsRequested int
@@ -113,9 +118,8 @@ func (sw *schedWorker) handleWorker() {
 			enabled := worker.enabled
 			sched.workersLk.Unlock()
 
-			// ask for more windows if we need them (non-blocking)
 			if enabled {
-				sched.workerChange <- struct{}{} // worker 空闲申请调度
+				sched.workerChange <- struct{}{}
 			}
 		}
 
@@ -140,17 +144,41 @@ func (sw *schedWorker) handleWorker() {
 				}
 			}
 
-			select {
-			case <-sw.heartbeatTimer.C:
-			case <-worker.workerOnFree:
-				log.Debugf("huanghai, task done, worker id: %s", sw.wid)
-				break
-			case <-sched.closing:
-				return
-			case <-worker.closingMgr:
+			// wait for more tasks to be assigned by the main scheduler or for the worker
+			// to finish precessing a task
+			update, pokeSched, ok := sw.waitForUpdates()
+			if !ok {
 				return
 			}
+
+			// 完成任务时,pokeSched = true,
+			if pokeSched {
+				// a task has finished preparing, which can mean that we've freed some space on some worker
+				select {
+				// 异步通知调度线程执行调度代码
+				// jump to: sched.go - func (sh *scheduler) runSched()
+				// sched.go - func (sh *scheduler) trySched()
+				case sched.workerChange <- struct{}{}:
+				default: // workerChange is buffered, and scheduling is global, so it's ok if we don't send here
+				}
+			}
+			if update {
+				break
+			}
+
 		}
+
+		// process assigned windows (non-blocking)
+		sched.workersLk.RLock()
+		worker.wndLk.Lock()
+
+		//sw.workerCompactWindows()
+
+		// send tasks to the worker
+		sw.processAssignedWindows()
+
+		worker.wndLk.Unlock()
+		sched.workersLk.RUnlock()
 	}
 }
 
@@ -205,9 +233,6 @@ func (sw *schedWorker) checkSession(ctx context.Context) bool {
 			case <-sw.heartbeatTimer.C:
 				continue
 			case w := <-sw.scheduledWindows:
-				//log.Debugf("huanghai, func (sw *schedWorker) checkSession, " +
-				//"sw.worker.activeWindows = append(... , w(:= <-sw.sche" +
-				//"duledWindows)), ")
 				// was in flight when initially disabled, return
 				sw.worker.wndLk.Lock()
 				sw.worker.activeWindows = append(sw.worker.activeWindows, w)
@@ -237,10 +262,8 @@ func (sw *schedWorker) checkSession(ctx context.Context) bool {
 	}
 }
 
+// 这个函数弃用, 因为维护变量 sw.windowsRequested 的智力负担较重
 func (sw *schedWorker) requestWindows() bool {
-	//log.Debugf("huanghai, func (sw *schedWorker) requestWindows, "+
-	//"sw.sched.windowRequests <- &schedWindowRequest{sw.wid = "+
-	//"%s, sw.scheduledWindows = %v}", sw.wid, sw.scheduledWindows)
 	for ; sw.windowsRequested < SchedWindows; sw.windowsRequested++ {
 		select {
 		case sw.sched.windowRequests <- &schedWindowRequest{
@@ -261,10 +284,6 @@ func (sw *schedWorker) waitForUpdates() (update bool, sched bool, ok bool) {
 	case <-sw.heartbeatTimer.C:
 		return false, false, true
 	case w := <-sw.scheduledWindows:
-		//log.Debugf("huanghai, func (sw *schedWorker) waitForUpdates, "+
-		//"case w := <-sw.scheduledWindows, "+
-		//"sw.worker.activeWindows = append(... , w(:= <-sw.sche"+
-		//"duledWindows)), w = %v", w)
 		sw.worker.wndLk.Lock()
 		sw.worker.activeWindows = append(sw.worker.activeWindows, w)
 		sw.worker.wndLk.Unlock()
@@ -280,6 +299,9 @@ func (sw *schedWorker) waitForUpdates() (update bool, sched bool, ok bool) {
 	return false, false, false
 }
 
+// worker.activeWindows[x].todo 中的数据是在官方调度代码填充的
+// 另外 sw.scheduledWindows 未使用, 直接导致 sw.worker.activeWindows 未使用
+// 由于弃用官方调度代码,所以这个函数也不需要了
 func (sw *schedWorker) workerCompactWindows() {
 	worker := sw.worker
 
@@ -393,10 +415,6 @@ func (sw *schedWorker) startProcessingTask(taskDone chan struct{}, req *workerRe
 	w.lk.Unlock()
 
 	go func() {
-		//log.Debugf("huanghai, enter func (sw *schedWorker) startProcessingTask, "+
-		//"taskType: %s, needRes: %v, workerRes: %v, make new workTracker object",
-		//req.taskType, needRes, w.info.Resources)
-
 		// first run the prepare step (e.g. fetching sector data from other worker)
 		err := req.prepare(req.ctx, sh.workTracker.worker(sw.wid, w.workerRpc))
 		sh.workersLk.Lock()
