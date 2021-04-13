@@ -84,7 +84,9 @@ type workerHandle struct {
 
 	lk sync.Mutex
 
-	wndLk         sync.Mutex
+	wndLk sync.Mutex
+	// 官方原版代码 sched_worker.go - type schedWorker struct - scheduledWindows 我放弃使用
+	// 就没有其他地方写 activeWindows, 直接导致 worker.activeWindows 未使用
 	activeWindows []*schedWindow
 
 	enabled bool
@@ -94,7 +96,6 @@ type workerHandle struct {
 	closedMgr      chan struct{}
 	closingMgr     chan struct{}
 	workerOnFree   chan struct{}
-	todo           []*workerRequest
 }
 
 type schedWindowRequest struct {
@@ -111,7 +112,6 @@ type schedWindow struct {
 }
 
 type workerDisableReq struct {
-	todo          []*workerRequest
 	activeWindows []*schedWindow
 	wid           WorkerID
 	done          func()
