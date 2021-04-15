@@ -373,10 +373,10 @@ func (sh *scheduler) trySched() {
 				continue
 			}
 
-			//freecount := sh.getTaskFreeCount(wid, task.taskType)
-			//if freecount <= 0 {
-			//continue
-			//}
+			freecount := sh.getTaskFreeCount(wid, task.taskType)
+			if freecount <= 0 {
+				continue
+			}
 			tried++
 			//freetable = append(freetable, freecount)
 			acceptable = append(acceptable, wid)
@@ -742,4 +742,57 @@ func (sh *scheduler) assignWorker(wid WorkerID, w *workerHandle, req *workerRequ
 	}()
 
 	return nil
+}
+
+//func (sh *scheduler) getTaskFreeCount(wid WorkerID, taskType sealtasks.TaskType) int {
+func (sh *scheduler) getTaskFreeCount(wid WorkerID, taskType sealtasks.TaskType) int {
+	whl := sh.workers[wid]
+	freeCount := whl.info.GetTaskFreeCount(taskType)
+	runCount := whl.info.GetTaskRunCount(taskType)
+
+	// 调度 ap, p1 任务
+	if taskType == sealtasks.TTAddPiece || taskType == sealtasks.TTPreCommit1 {
+		if freeCount > 0 {
+			return freeCount
+		}
+
+		return 0
+	}
+
+	// p2, c1, c2 三者互斥运行
+
+	// 调度 P2, c1 任务
+	if taskType == sealtasks.TTPreCommit2 || taskType == sealtasks.TTCommit1 {
+		// 不能有 C2 任务在运行
+		if whl.info.GetTaskRunCount(sealtasks.TTCommit2) > 0 {
+			return 0
+		}
+
+		if freeCount > 0 && runCount == 0 {
+			return freeCount
+		}
+
+		log.Infof("worker %s already doing C2 taskjob")
+		return 0
+	}
+
+	// 调度 C2 任务时, 不能有个 p2 c1 c2 任务在运行
+	if taskType == sealtasks.TTCommit2 {
+		if whl.info.GetTaskRunCount(sealtasks.TTPreCommit2) > 0 ||
+			whl.info.GetTaskRunCount(sealtasks.TTCommit1) > 0 ||
+			whl.info.GetTaskRunCount(sealtasks.TTCommit2) > 0 {
+			return 0
+		}
+	}
+
+	// 不限制
+	if taskType == sealtasks.TTFinalize ||
+		taskType == sealtasks.TTFetch ||
+		taskType == sealtasks.TTUnseal ||
+		taskType == sealtasks.TTReadUnsealed {
+
+		return 1
+	}
+
+	return 0
 }

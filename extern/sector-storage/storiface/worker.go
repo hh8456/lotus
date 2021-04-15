@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,7 +22,9 @@ import (
 type WorkerInfo struct {
 	Hostname string
 
-	Resources WorkerResources
+	Resources       WorkerResources
+	taskResourcesLk sync.Mutex
+	TaskResources   map[sealtasks.TaskType]*TaskConfig
 }
 
 type WorkerResources struct {
@@ -40,6 +45,12 @@ type WorkerStats struct {
 	MemUsedMax uint64
 	GpuUsed    bool   // nolint
 	CpuUse     uint64 // nolint
+}
+
+type TaskConfig struct {
+	taskType   sealtasks.TaskType
+	limitCount int
+	runCount   int
 }
 
 const (
@@ -143,4 +154,82 @@ type WorkerReturn interface {
 	ReturnUnsealPiece(ctx context.Context, callID CallID, err *CallError) error
 	ReturnReadPiece(ctx context.Context, callID CallID, ok bool, err *CallError) error
 	ReturnFetch(ctx context.Context, callID CallID, err *CallError) error
+}
+
+func NewTaskLimitConfig() map[sealtasks.TaskType]*TaskConfig {
+	taskLimitCount := 20
+	config := map[sealtasks.TaskType]*TaskConfig{}
+	config[sealtasks.TTAddPiece] = newTaskLimitConfig(taskLimitCount, sealtasks.TTAddPiece)
+	config[sealtasks.TTPreCommit1] = newTaskLimitConfig(taskLimitCount, sealtasks.TTPreCommit1)
+	config[sealtasks.TTPreCommit2] = newTaskLimitConfig(taskLimitCount, sealtasks.TTPreCommit2)
+	config[sealtasks.TTCommit1] = newTaskLimitConfig(taskLimitCount, sealtasks.TTCommit1)
+	config[sealtasks.TTCommit2] = newTaskLimitConfig(taskLimitCount, sealtasks.TTCommit2)
+	config[sealtasks.TTFinalize] = newTaskLimitConfig(taskLimitCount, sealtasks.TTFinalize)
+	config[sealtasks.TTFetch] = newTaskLimitConfig(taskLimitCount, sealtasks.TTFetch)
+	config[sealtasks.TTUnseal] = newTaskLimitConfig(taskLimitCount, sealtasks.TTUnseal)
+	config[sealtasks.TTReadUnsealed] = newTaskLimitConfig(taskLimitCount, sealtasks.TTReadUnsealed)
+
+	if ap, ok := os.LookupEnv("ap-task-limit"); ok {
+		if apCnt, e := strconv.Atoi(ap); e == nil {
+			config[sealtasks.TTAddPiece] = newTaskLimitConfig(apCnt, sealtasks.TTAddPiece)
+		}
+	}
+
+	// TODO 需要补充
+
+	return config
+}
+
+func newTaskLimitConfig(limitCount int, taskType sealtasks.TaskType) *TaskConfig {
+	return &TaskConfig{
+		taskType:   taskType,
+		limitCount: limitCount,
+		runCount:   0,
+	}
+}
+
+func (wi *WorkerInfo) TaskAddOne(taskType sealtasks.TaskType) {
+	wi.taskResourcesLk.Lock()
+	defer wi.taskResourcesLk.Unlock()
+	if cnt, ok := wi.TaskResources[taskType]; ok {
+		cnt.runCount++
+	}
+}
+
+func (wi *WorkerInfo) TaskReduceOne(taskType sealtasks.TaskType) {
+	wi.taskResourcesLk.Lock()
+	defer wi.taskResourcesLk.Unlock()
+	if cnt, ok := wi.TaskResources[taskType]; ok {
+		cnt.runCount--
+	}
+}
+
+func (wi *WorkerInfo) GetTaskRunCount(taskType sealtasks.TaskType) int {
+	wi.taskResourcesLk.Lock()
+	defer wi.taskResourcesLk.Unlock()
+	if cnt, ok := wi.TaskResources[taskType]; ok {
+		return cnt.runCount
+	}
+
+	return 0
+}
+
+func (wi *WorkerInfo) GetTaskLimitCount(taskType sealtasks.TaskType) int {
+	wi.taskResourcesLk.Lock()
+	defer wi.taskResourcesLk.Unlock()
+	if cnt, ok := wi.TaskResources[taskType]; ok {
+		return cnt.limitCount
+	}
+
+	return 0
+}
+
+func (wi *WorkerInfo) GetTaskFreeCount(taskType sealtasks.TaskType) int {
+	wi.taskResourcesLk.Lock()
+	defer wi.taskResourcesLk.Unlock()
+	if cnt, ok := wi.TaskResources[taskType]; ok {
+		return cnt.limitCount - cnt.runCount
+	}
+
+	return 0
 }

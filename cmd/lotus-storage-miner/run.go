@@ -70,6 +70,32 @@ var runCmd = &cli.Command{
 			Usage: "manage open file limit",
 			Value: true,
 		},
+		&cli.IntFlag{
+			Name:  "ap-task-count",
+			Usage: "ap task limit count",
+			Value: 20,
+		},
+		&cli.IntFlag{
+			Name:  "p1-task-count",
+			Usage: "p1 task limit count",
+			Value: 20,
+		},
+		&cli.IntFlag{
+			Name:  "p2-task-count",
+			Usage: "p2 task limit count",
+			Value: 20,
+		},
+		&cli.IntFlag{
+			Name:  "c1-task-count",
+			Usage: "c1 task limit count",
+			Value: 20,
+		},
+
+		&cli.IntFlag{
+			Name:  "c2-task-count",
+			Usage: "c2 task limit count",
+			Value: 20,
+		},
 	},
 	Action: func(cctx *cli.Context) error {
 		if cctx.Bool("wdpost") {

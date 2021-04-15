@@ -517,7 +517,8 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 	}
 
 	return storiface.WorkerInfo{
-		Hostname: hostname,
+		Hostname:      hostname,
+		TaskResources: storiface.NewTaskLimitConfig(),
 		Resources: storiface.WorkerResources{
 			MemPhysical: mem.Total,
 			MemSwap:     memSwap,
