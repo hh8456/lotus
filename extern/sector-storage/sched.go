@@ -232,7 +232,7 @@ func (sh *scheduler) runSched() {
 
 	for {
 		var doSched bool
-		// huanghai toDisable 是断线的 worker
+		// toDisable 是断线的 worker
 		var toDisable []workerDisableReq
 
 		select {
@@ -246,7 +246,6 @@ func (sh *scheduler) runSched() {
 			toDisable = append(toDisable, dreq)
 			doSched = true
 		case req := <-sh.schedule:
-			log.Debugf("huanghai, func (sh *scheduler) runSched, case req := <-sh.schedule:, req.taskType: %s", req.taskType)
 			sh.schedQueue.Push(req)
 			doSched = true
 
@@ -254,7 +253,6 @@ func (sh *scheduler) runSched() {
 				sh.testSync <- struct{}{}
 			}
 		case req := <-sh.windowRequests:
-			//log.Debugf("huanghai, func (sh *scheduler) runSched, case req := <-sh.windowRequests:")
 			sh.openWindows = append(sh.openWindows, req)
 			doSched = true
 		case ireq := <-sh.info:
@@ -291,9 +289,9 @@ func (sh *scheduler) runSched() {
 				}
 			}
 
-			// huanghai worker 断线后,必然会执行下面的 for 循环
+			// worker 断线后,必然会执行下面的 for 循环
 			for _, req := range toDisable {
-				// huanghai 不质押扇区, worker 断线后,并不会执行下面的 for 循环
+				// 不质押扇区, worker 断线后,并不会执行下面的 for 循环
 				for _, window := range req.activeWindows {
 					for _, request := range window.todo {
 						sh.schedQueue.Push(request)
@@ -362,23 +360,29 @@ func (sh *scheduler) trySched() {
 				continue
 			}
 
+			// p1/p2/c1 放一个 worker 处理
 			if task.taskType == sealtasks.TTPreCommit1 || task.taskType == sealtasks.TTPreCommit2 || task.taskType == sealtasks.TTCommit1 {
 				if isExist := task.sel.FindDataWorker(task.ctx, task.taskType, task.sector.ID, task.sector.ProofType, worker); !isExist {
+					log.Infof("%+v jobTask task.sel.Ok return false ", task.taskType)
 					continue
 				}
 			}
 
 			ok, err := task.sel.Ok(task.ctx, task.taskType, task.sector.ProofType, worker)
 			if err != nil || !ok {
+				log.Infof("%+v jobTask task.sel.Ok return false ", task.taskType)
 				continue
 			}
 
 			freecount := sh.getTaskFreeCount(wid, task.taskType)
 			if freecount <= 0 {
+				log.Infof("%+v jobTask freecount is 0 ", task.taskType)
 				continue
 			}
 			tried++
-			//freetable = append(freetable, freecount)
+
+			// 根据 freetable acceptable 来查询到最空闲的 worker
+			freetable = append(freetable, freecount)
 			acceptable = append(acceptable, wid)
 
 			if isExist := task.sel.FindDataWorker(task.ctx, task.taskType, task.sector.ID, task.sector.ProofType, worker); isExist {
@@ -391,6 +395,7 @@ func (sh *scheduler) trySched() {
 			if localWorker {
 				best = len(acceptable) - 1
 			} else {
+				// 选出空闲数最大的 max freecount
 				max := 0
 				for i, v := range freetable {
 					if v > max {
@@ -470,7 +475,7 @@ func (sh *scheduler) trySched1() {
 			// TODO
 			for wid, worker := range sh.workers {
 				if !worker.enabled {
-					log.Debugf("huanghai, worker id: %s, worker.enabled = false", wid)
+					log.Info(" worker id: %s, worker.enabled = false", wid)
 					continue
 				}
 
@@ -673,7 +678,7 @@ func (sh *scheduler) Close(ctx context.Context) error {
 
 // 这里是从 sched_worker.go - func (sw *schedWorker) startProcessingTask 修改的
 func (sh *scheduler) assignWorker(wid WorkerID, w *workerHandle, req *workerRequest) error {
-	//sh.taskAddOne(wid, req.taskType)
+	sh.taskAddOne(wid, req.taskType)
 	needRes := ResourceTable[req.taskType][req.sector.ProofType]
 
 	w.lk.Lock()
@@ -685,7 +690,7 @@ func (sh *scheduler) assignWorker(wid WorkerID, w *workerHandle, req *workerRequ
 		sh.workersLk.Lock()
 
 		if err != nil {
-			//sh.taskReduceOne(wid, req.taskType)
+			sh.taskReduceOne(wid, req.taskType)
 			w.lk.Lock()
 			w.preparing.free(w.info.Resources, needRes)
 			w.lk.Unlock()
@@ -720,7 +725,7 @@ func (sh *scheduler) assignWorker(wid WorkerID, w *workerHandle, req *workerRequ
 			}
 
 			err = req.work(req.ctx, sh.workTracker.worker(wid, w.workerRpc))
-			//sh.taskReduceOne(wid, req.taskType)
+			sh.taskReduceOne(wid, req.taskType)
 
 			select {
 			case req.ret <- workerResponse{err: err}:
@@ -744,13 +749,16 @@ func (sh *scheduler) assignWorker(wid WorkerID, w *workerHandle, req *workerRequ
 	return nil
 }
 
-//func (sh *scheduler) getTaskFreeCount(wid WorkerID, taskType sealtasks.TaskType) int {
+// p2, c2 使用 GPU
+// p1, c1 使用 cpu
 func (sh *scheduler) getTaskFreeCount(wid WorkerID, taskType sealtasks.TaskType) int {
 	whl := sh.workers[wid]
 	freeCount := whl.info.GetTaskFreeCount(taskType)
 	runCount := whl.info.GetTaskRunCount(taskType)
 
-	// 调度 ap, p1 任务
+	log.Debugf("huanghai, %+v jobTask freecount is %d, runCount is %d ", taskType, freeCount, runCount)
+
+	//  可以同时运行多个 ap, p1 任务
 	if taskType == sealtasks.TTAddPiece || taskType == sealtasks.TTPreCommit1 {
 		if freeCount > 0 {
 			return freeCount
@@ -759,12 +767,19 @@ func (sh *scheduler) getTaskFreeCount(wid WorkerID, taskType sealtasks.TaskType)
 		return 0
 	}
 
-	// p2, c1, c2 三者互斥运行
+	// 只能同时运行一个 p2 任务, 因为要独占显卡, 并且要和 c2 互斥运行
+	if taskType == sealtasks.TTPreCommit2 {
+		// 不能有 p2 任务在运行
+		if runCount > 0 {
+			log.Infof("worker %s already doing p2 taskjob, can not run p2 "+
+				"taskjob again, p2 必须独占显卡,但已经有 p2 任务在运行了", wid)
+			return 0
+		}
 
-	// 调度 P2, c1 任务
-	if taskType == sealtasks.TTPreCommit2 || taskType == sealtasks.TTCommit1 {
 		// 不能有 C2 任务在运行
 		if whl.info.GetTaskRunCount(sealtasks.TTCommit2) > 0 {
+			log.Infof("worker %s already doing c2 taskjob, can not run p2 "+
+				"taskjob, p2 必须独占显卡,但已经有 c2 任务在占用显卡运行了", wid)
 			return 0
 		}
 
@@ -772,17 +787,54 @@ func (sh *scheduler) getTaskFreeCount(wid WorkerID, taskType sealtasks.TaskType)
 			return freeCount
 		}
 
-		log.Infof("worker %s already doing C2 taskjob")
+		log.Infof("worker %s want todo c2 taskjob, but fail. "+
+			"freeCount = %d( want to > 0 ), runCount = %d( want to 0 )", wid)
+
 		return 0
 	}
 
-	// 调度 C2 任务时, 不能有个 p2 c1 c2 任务在运行
-	if taskType == sealtasks.TTCommit2 {
-		if whl.info.GetTaskRunCount(sealtasks.TTPreCommit2) > 0 ||
-			whl.info.GetTaskRunCount(sealtasks.TTCommit1) > 0 ||
-			whl.info.GetTaskRunCount(sealtasks.TTCommit2) > 0 {
+	// 只能同时运行一个 c1 任务, 避免多个 c1 抢占CPU资源
+	if taskType == sealtasks.TTCommit1 {
+		if runCount > 0 {
+			log.Infof("worker %s already doing c1 taskjob, can not run c1 "+
+				"taskjob again, 只能有一个 c1 任务运行, 但已经有 c1 任务在运行了", wid)
 			return 0
 		}
+
+		if freeCount > 0 && runCount == 0 {
+			return freeCount
+		}
+
+		log.Infof("worker %s want todo c1 taskjob, but fail. "+
+			"freeCount = %d( want to > 0 ), runCount = %d( want to 0 )", wid)
+
+		return 0
+	}
+
+	// 只能同时运行一个 c2 任务, 因为要独占显卡, 并且要和 p2 互斥运行
+	if taskType == sealtasks.TTCommit2 {
+		// 不能有 c2 任务在运行
+		if runCount > 0 {
+			log.Infof("worker %s already doing c2 taskjob, can not run c2 "+
+				"taskjob again, c2 必须独占显卡,但已经有 c2 任务在运行了", wid)
+			return 0
+		}
+
+		// 不能有 p2 任务在运行
+		if whl.info.GetTaskRunCount(sealtasks.TTPreCommit2) > 0 {
+			log.Infof("worker %s already doing p2 taskjob, can not run c2 "+
+				"taskjob, c2 必须独占显卡,但已经有 p2 任务在占用显卡运行了", wid)
+			return 0
+		}
+
+		if freeCount > 0 && runCount == 0 {
+			return freeCount
+		}
+
+		log.Infof("worker %s want todo c2 taskjob, but fail. "+
+			"freeCount = %d( want to > 0 ), runCount = %d( want to 0 )", wid)
+
+		return 0
 	}
 
 	// 不限制
@@ -795,4 +847,14 @@ func (sh *scheduler) getTaskFreeCount(wid WorkerID, taskType sealtasks.TaskType)
 	}
 
 	return 0
+}
+
+func (sh *scheduler) taskAddOne(wid WorkerID, taskType sealtasks.TaskType) {
+	whl := sh.workers[wid]
+	whl.info.TaskAddOne(taskType)
+}
+
+func (sh *scheduler) taskReduceOne(wid WorkerID, taskType sealtasks.TaskType) {
+	whl := sh.workers[wid]
+	whl.info.TaskReduceOne(taskType)
 }

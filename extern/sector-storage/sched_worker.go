@@ -6,6 +6,7 @@ import (
 
 	"golang.org/x/xerrors"
 
+	sealtasks "github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
 )
 
@@ -30,11 +31,26 @@ type schedWorker struct {
 
 // context only used for startup
 func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
-	log.Debugf("huanghai, func (sh *scheduler) runWorker")
+	// 这里应该是空指针,明天继续调试
 	info, err := w.Info(ctx)
 	if err != nil {
 		return xerrors.Errorf("getting worker info: %w", err)
 	}
+
+	log.Debugf("huanghai, ap taskResources, limitCount: %d, runCount: %d",
+		info.GetTaskLimitCount(sealtasks.TTAddPiece), info.GetTaskFreeCount(sealtasks.TTAddPiece))
+
+	log.Debugf("huanghai, p1 taskResources, limitCount: %d, runCount: %d",
+		info.GetTaskLimitCount(sealtasks.TTPreCommit1), info.GetTaskFreeCount(sealtasks.TTPreCommit1))
+
+	log.Debugf("huanghai, p2 taskResources, limitCount: %d, runCount: %d",
+		info.GetTaskLimitCount(sealtasks.TTPreCommit2), info.GetTaskFreeCount(sealtasks.TTPreCommit2))
+
+	log.Debugf("huanghai, c1 taskResources, limitCount: %d, runCount: %d",
+		info.GetTaskLimitCount(sealtasks.TTCommit1), info.GetTaskFreeCount(sealtasks.TTCommit1))
+
+	log.Debugf("huanghai, c2 taskResources, limitCount: %d, runCount: %d",
+		info.GetTaskLimitCount(sealtasks.TTCommit2), info.GetTaskFreeCount(sealtasks.TTCommit2))
 
 	sessID, err := w.Session(ctx)
 	if err != nil {

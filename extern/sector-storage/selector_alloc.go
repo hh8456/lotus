@@ -74,7 +74,7 @@ var _ WorkerSelector = &allocSelector{}
 func (s *allocSelector) FindDataWorker(ctx context.Context, task sealtasks.TaskType, sid abi.SectorID, spt abi.RegisteredSealProof, whnd *workerHandle) bool {
 	paths, e0 := whnd.workerRpc.Paths(ctx)
 	if e0 != nil {
-		log.Debugf("huanghai, func (s *allocSelector) FindDataWorker, whnd.workerRpc.Paths() error: %v", e0)
+		log.Infof("huanghai, func (s *allocSelector) FindDataWorker, whnd.workerRpc.Paths() error: %v", e0)
 		return false
 	}
 
@@ -110,13 +110,13 @@ func (s *allocSelector) FindDataWorker(ctx context.Context, task sealtasks.TaskT
 
 	ssize, e1 := spt.SectorSize()
 	if e1 != nil {
-		log.Debugf("huanghai, func (s *allocSelector) FindDataWorker, spt.SectorSize() error: %v", e1)
+		log.Infof("huanghai, func (s *allocSelector) FindDataWorker, spt.SectorSize() error: %v", e1)
 		return false
 	}
 
 	sectorsInfoList, e2 := s.index.StorageFindSector(ctx, sid, ft, ssize, false)
 	if e2 != nil {
-		log.Debugf("huanghai, func (s *allocSelector) FindDataWorker, s.index.StorageFindSector() error: %v", e2)
+		log.Infof("huanghai, func (s *allocSelector) FindDataWorker, s.index.StorageFindSector() error: %v", e2)
 		return false
 	}
 

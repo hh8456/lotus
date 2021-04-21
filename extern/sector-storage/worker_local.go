@@ -516,6 +516,13 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 		memSwap = 0
 	}
 
+	dbgInfo := storiface.NewTaskLimitConfig()
+	log.Debugf("huanghai, 初始化 ap 任务上限数量: %d, 正在运行的数量: %d", dbgInfo[sealtasks.TTAddPiece].LimitCount, dbgInfo[sealtasks.TTAddPiece].RunCount)
+	log.Debugf("huanghai, 初始化 p1 任务上限数量: %d, 正在运行的数量: %d", dbgInfo[sealtasks.TTPreCommit1].LimitCount, dbgInfo[sealtasks.TTPreCommit1].RunCount)
+	log.Debugf("huanghai, 初始化 p2 任务上限数量: %d, 正在运行的数量: %d", dbgInfo[sealtasks.TTPreCommit2].LimitCount, dbgInfo[sealtasks.TTPreCommit2].RunCount)
+	log.Debugf("huanghai, 初始化 c1 任务上限数量: %d, 正在运行的数量: %d", dbgInfo[sealtasks.TTCommit1].LimitCount, dbgInfo[sealtasks.TTCommit1].RunCount)
+	log.Debugf("huanghai, 初始化 c2 任务上限数量: %d, 正在运行的数量: %d", dbgInfo[sealtasks.TTCommit2].LimitCount, dbgInfo[sealtasks.TTCommit2].RunCount)
+
 	return storiface.WorkerInfo{
 		Hostname:      hostname,
 		TaskResources: storiface.NewTaskLimitConfig(),

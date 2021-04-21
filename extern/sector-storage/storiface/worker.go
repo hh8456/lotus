@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
+	"github.com/prometheus/common/log"
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/specs-storage/storage"
@@ -49,8 +50,8 @@ type WorkerStats struct {
 
 type TaskConfig struct {
 	taskType   sealtasks.TaskType
-	limitCount int
-	runCount   int
+	LimitCount int
+	RunCount   int
 }
 
 const (
@@ -158,12 +159,15 @@ type WorkerReturn interface {
 
 func NewTaskLimitConfig() map[sealtasks.TaskType]*TaskConfig {
 	taskLimitCount := 20
-	config := map[sealtasks.TaskType]*TaskConfig{}
+	config := make(map[sealtasks.TaskType]*TaskConfig)
 	config[sealtasks.TTAddPiece] = newTaskLimitConfig(taskLimitCount, sealtasks.TTAddPiece)
 	config[sealtasks.TTPreCommit1] = newTaskLimitConfig(taskLimitCount, sealtasks.TTPreCommit1)
-	config[sealtasks.TTPreCommit2] = newTaskLimitConfig(taskLimitCount, sealtasks.TTPreCommit2)
-	config[sealtasks.TTCommit1] = newTaskLimitConfig(taskLimitCount, sealtasks.TTCommit1)
-	config[sealtasks.TTCommit2] = newTaskLimitConfig(taskLimitCount, sealtasks.TTCommit2)
+	// P2 只能同时运行一个
+	config[sealtasks.TTPreCommit2] = newTaskLimitConfig(1, sealtasks.TTPreCommit2)
+	// C1 只能同时运行一个
+	config[sealtasks.TTCommit1] = newTaskLimitConfig(1, sealtasks.TTCommit1)
+	// C2 只能同时运行一个
+	config[sealtasks.TTCommit2] = newTaskLimitConfig(1, sealtasks.TTCommit2)
 	config[sealtasks.TTFinalize] = newTaskLimitConfig(taskLimitCount, sealtasks.TTFinalize)
 	config[sealtasks.TTFetch] = newTaskLimitConfig(taskLimitCount, sealtasks.TTFetch)
 	config[sealtasks.TTUnseal] = newTaskLimitConfig(taskLimitCount, sealtasks.TTUnseal)
@@ -183,8 +187,8 @@ func NewTaskLimitConfig() map[sealtasks.TaskType]*TaskConfig {
 func newTaskLimitConfig(limitCount int, taskType sealtasks.TaskType) *TaskConfig {
 	return &TaskConfig{
 		taskType:   taskType,
-		limitCount: limitCount,
-		runCount:   0,
+		LimitCount: limitCount,
+		RunCount:   0,
 	}
 }
 
@@ -192,7 +196,7 @@ func (wi *WorkerInfo) TaskAddOne(taskType sealtasks.TaskType) {
 	wi.taskResourcesLk.Lock()
 	defer wi.taskResourcesLk.Unlock()
 	if cnt, ok := wi.TaskResources[taskType]; ok {
-		cnt.runCount++
+		cnt.RunCount++
 	}
 }
 
@@ -200,7 +204,7 @@ func (wi *WorkerInfo) TaskReduceOne(taskType sealtasks.TaskType) {
 	wi.taskResourcesLk.Lock()
 	defer wi.taskResourcesLk.Unlock()
 	if cnt, ok := wi.TaskResources[taskType]; ok {
-		cnt.runCount--
+		cnt.RunCount--
 	}
 }
 
@@ -208,7 +212,7 @@ func (wi *WorkerInfo) GetTaskRunCount(taskType sealtasks.TaskType) int {
 	wi.taskResourcesLk.Lock()
 	defer wi.taskResourcesLk.Unlock()
 	if cnt, ok := wi.TaskResources[taskType]; ok {
-		return cnt.runCount
+		return cnt.RunCount
 	}
 
 	return 0
@@ -218,7 +222,7 @@ func (wi *WorkerInfo) GetTaskLimitCount(taskType sealtasks.TaskType) int {
 	wi.taskResourcesLk.Lock()
 	defer wi.taskResourcesLk.Unlock()
 	if cnt, ok := wi.TaskResources[taskType]; ok {
-		return cnt.limitCount
+		return cnt.LimitCount
 	}
 
 	return 0
@@ -228,8 +232,11 @@ func (wi *WorkerInfo) GetTaskFreeCount(taskType sealtasks.TaskType) int {
 	wi.taskResourcesLk.Lock()
 	defer wi.taskResourcesLk.Unlock()
 	if cnt, ok := wi.TaskResources[taskType]; ok {
-		return cnt.limitCount - cnt.runCount
+		log.Debugf("huanghai, taskType: %v, limitCount: %d, runCount: %d, taskFreeCount is %d",
+			taskType, cnt.LimitCount, cnt.RunCount, cnt.LimitCount-cnt.RunCount)
+		return cnt.LimitCount - cnt.RunCount
 	}
 
+	log.Debugf("huanghai, taskType: %v, taskFreeCount is 0 ", taskType)
 	return 0
 }
